@@ -62,18 +62,26 @@
                 </td>
                 <td>
                   <a
-                    href="{{ url_for('schedule', id=student.id) }}"
-                    class="btn btn-sm btn-info btn-action text-white"
-                    >Manage Courses</a
-                  >
-                  <a
                     href="{{ url_for('edit', id=student.id) }}"
-                    class="btn btn-sm btn-primary btn-action"
+                    class="btn btn-sm btn-primary"
                     >Edit</a
                   >
+
+                  <a
+                    href="{{ url_for('schedule', id=student.id) }}"
+                    class="btn btn-sm btn-info text-white"
+                    >Manage Courses</a
+                  >
+
+                  <a
+                    href="{{ url_for('voucher', student_id=student.id) }}"
+                    class="btn btn-sm btn-success"
+                    >Fee Voucher</a
+                  >
+
                   <a
                     href="{{ url_for('delete', id=student.id) }}"
-                    class="btn btn-sm btn-danger btn-action"
+                    class="btn btn-sm btn-danger"
                     onclick="
                       return confirm(
                         'Are you sure you want to delete this record?',
