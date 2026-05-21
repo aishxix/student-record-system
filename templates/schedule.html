@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Schedule</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container mt-5">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Schedule for {{ student.name }} ({{ student.roll_no }})</h2>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary"
+          >Back to Dashboard</a
+        >
+      </div>
+
+      <div class="row">
+        <div class="col-md-8">
+          <div class="card p-4">
+            <h4 class="mb-3">Enrolled Courses</h4>
+            <div class="table-responsive">
+              <table class="table table-striped align-middle text-center">
+                <thead class="table-dark">
+                  <tr>
+                    <th>Course ID</th>
+                    <th>Course Name</th>
+                    <th>Credits</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for course in enrolled_courses %}
+                  <tr>
+                    <td>{{ course.course_id }}</td>
+                    <td class="text-start">{{ course.course_name }}</td>
+                    <td>{{ course.credit_hours }}</td>
+                    <td>
+                      <a
+                        href="{{ url_for('drop_course', student_id=student.id, enrollment_id=course.enrollment_id) }}"
+                        class="btn btn-sm btn-danger"
+                        >Drop</a
+                      >
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="4" class="text-center py-3">
+                      No courses enrolled yet.
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card p-4">
+            <h4 class="mb-3">Register Course</h4>
+            <form
+              action="{{ url_for('enroll', student_id=student.id) }}"
+              method="POST"
+            >
+              <div class="mb-3">
+                <label class="form-label text-muted">Available Classes</label>
+                <select name="course_id" class="form-select" required>
+                  <option value="" disabled selected>Select a class...</option>
+                  {% for course in available_courses %}
+                  <option value="{{ course.course_id }}">
+                    {{ course.course_name }} ({{ course.credit_hours }} Cr.)
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <button
+                type="submit"
+                class="btn btn-success w-100"
+                {%
+                if
+                not
+                available_courses
+                %}disabled{%
+                endif
+                %}
+              >
+                {% if available_courses %}Complete Enrollment{% else %}Fully
+                Registered{% endif %}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

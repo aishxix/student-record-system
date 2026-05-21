@@ -1,9 +1,9 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for
 import pyodbc
-import os
 from dotenv import load_dotenv
 
-# Load environment variables from the .env file
+# Load environment configurations
 load_dotenv()
 
 app = Flask(__name__)
@@ -21,13 +21,12 @@ connection_string = (
 )
 
 def get_db_connection():
-    conn = pyodbc.connect(connection_string)
-    return conn
+    return pyodbc.connect(connection_string)
 
-# ... (Keep the rest of your app.py code exactly the same below this) ...
-
-# Helper function to convert pyodbc rows to dictionaries so our HTML templates still work
+# Helper function for SQL Server dictionaries
 def row_to_dict(cursor, row):
+    if not row:
+        return None
     columns = [column[0] for column in cursor.description]
     return dict(zip(columns, row))
 
@@ -35,9 +34,31 @@ def row_to_dict(cursor, row):
 def index():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM students")
     
-    # Convert results to a list of dictionaries
+    # Advanced query to calculate total courses and credits per student
+    query = """
+        SELECT 
+            s.id, 
+            s.name, 
+            s.roll_no, 
+            s.department, 
+            s.semester,
+            COUNT(e.course_id) AS total_courses,
+            COALESCE(SUM(c.credit_hours), 0) AS total_credits
+        FROM students s
+        LEFT JOIN enrollments e ON s.id = e.student_id
+        LEFT JOIN courses c ON e.course_id = c.course_id
+        GROUP BY 
+            s.id, 
+            s.name, 
+            s.roll_no, 
+            s.department, 
+            s.semester
+    """
+    
+    cursor.execute(query)
+    # The row_to_dict function automatically attaches our new 'total_courses' 
+    # and 'total_credits' labels to the data so HTML can read it!
     students = [row_to_dict(cursor, row) for row in cursor.fetchall()]
     
     cursor.close()
@@ -54,7 +75,6 @@ def add():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Note: pyodbc uses ? instead of %s for parameters
         cursor.execute(
             "INSERT INTO students (name, roll_no, department, semester) VALUES (?, ?, ?, ?)",
             (name, roll_no, department, semester)
@@ -87,9 +107,7 @@ def edit(id):
         return redirect(url_for('index'))
 
     cursor.execute("SELECT * FROM students WHERE id=?", (id,))
-    row = cursor.fetchone()
-    student = row_to_dict(cursor, row) if row else None
-    
+    student = row_to_dict(cursor, cursor.fetchone())
     cursor.close()
     conn.close()
     return render_template('edit.html', student=student)
@@ -103,6 +121,66 @@ def delete(id):
     cursor.close()
     conn.close()
     return redirect(url_for('index'))
+
+# --- Course Registration Many-to-Many Routing Engine ---
+
+@app.route('/schedule/<int:id>')
+def schedule(id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1. Obtain student details
+    cursor.execute("SELECT * FROM students WHERE id=?", (id,))
+    student = row_to_dict(cursor, cursor.fetchone())
+
+    # 2. INNER JOIN query to pull courses mapped through the junction table
+    join_query = """
+        SELECT c.course_id, c.course_name, c.credit_hours, e.enrollment_id
+        FROM courses c
+        INNER JOIN enrollments e ON c.course_id = e.course_id
+        WHERE e.student_id = ?
+    """
+    cursor.execute(join_query, (id,))
+    enrolled_courses = [row_to_dict(cursor, row) for row in cursor.fetchall()]
+
+    # 3. Subquery looking for classes that this student hasn't signed up for yet
+    available_query = """
+        SELECT * FROM courses
+        WHERE course_id NOT IN (
+            SELECT course_id FROM enrollments WHERE student_id = ?
+        )
+    """
+    cursor.execute(available_query, (id,))
+    available_courses = [row_to_dict(cursor, row) for row in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+    return render_template('schedule.html', student=student, enrolled_courses=enrolled_courses, available_courses=available_courses)
+
+@app.route('/enroll/<int:student_id>', methods=['POST'])
+def enroll(student_id):
+    course_id = request.form.get('course_id')
+    if course_id:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO enrollments (student_id, course_id) VALUES (?, ?)",
+            (student_id, course_id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    return redirect(url_for('schedule', id=student_id))
+
+@app.route('/drop/<int:student_id>/<int:enrollment_id>')
+def drop_course(student_id, enrollment_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM enrollments WHERE enrollment_id=?", (enrollment_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return redirect(url_for('schedule', id=student_id))
 
 if __name__ == '__main__':
     app.run(debug=True)
